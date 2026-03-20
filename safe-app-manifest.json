@@ -1,0 +1,40 @@
+{
+  "app_id": "grove",
+  "name": "Grove",
+  "version": "0.1.0",
+  "safe_version": ">=2.0.0",
+  "description": "Sovereign workspace messaging where every conversation grows into knowledge.",
+  "author": "Sean Campbell",
+  "data_streams": [
+    {
+      "id": "messages",
+      "purpose": "Channel and direct messages between users and personas",
+      "retention": "permanent",
+      "description": "All messages are stored locally and indexed into the Willow knowledge graph"
+    },
+    {
+      "id": "channels",
+      "purpose": "Workspace channel definitions and membership",
+      "retention": "permanent",
+      "description": "Channel structure and metadata"
+    },
+    {
+      "id": "threads",
+      "purpose": "Threaded replies within channels",
+      "retention": "permanent",
+      "description": "Thread trees attached to parent messages"
+    }
+  ],
+  "permissions": [
+    "local_llm",
+    "knowledge_read",
+    "knowledge_write",
+    "persona_invoke",
+    "pigeon_drop"
+  ],
+  "privacy_tier": "client_only",
+  "local_processing": 1.0,
+  "entry_point": "grove.server:app",
+  "license": "MIT",
+  "repository": "https://github.com/seancampbell3161/safe-app-grove"
+}
