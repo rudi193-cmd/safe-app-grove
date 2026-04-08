@@ -1,0 +1,12 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "safe-app-grove"
+version = "0.1.0"
+description = "Sovereign workspace messaging where every conversation grows into knowledge."
+requires-python = ">=3.10"
+dependencies = [
+    "requests>=2.28.0",
+]

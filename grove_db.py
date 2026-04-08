@@ -15,7 +15,7 @@ from datetime import datetime
 from typing import Optional, List, Dict, Any, Tuple
 
 # Import 23-cubed lattice constants from Willow
-sys.path.insert(0, "/mnt/c/Users/Sean/Documents/GitHub/Willow/core")
+sys.path.insert(0, os.environ.get("WILLOW_CORE", "/home/sean-campbell/github/Willow/core"))
 from user_lattice import DOMAINS, TEMPORAL_STATES, DEPTH_MIN, DEPTH_MAX, LATTICE_SIZE
 
 # ---------------------------------------------------------------------------
