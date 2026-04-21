@@ -3,6 +3,8 @@
   "name": "Grove",
   "version": "0.1.0",
   "safe_version": ">=2.0.0",
+  "b17": "L8671",
+  "agent_type": "tool",
   "description": "Sovereign workspace messaging where every conversation grows into knowledge.",
   "author": "Sean Campbell",
   "data_streams": [
