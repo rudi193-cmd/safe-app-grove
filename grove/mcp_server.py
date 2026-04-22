@@ -148,6 +148,17 @@ async def grove_approve(request: Request) -> HTMLResponse:
 </html>""")
 
 
+# ── Schema init on startup ────────────────────────────────────────────────────
+# _get_pool() bootstraps schema on first use, but call explicitly here so any
+# schema error surfaces at startup rather than on first tool call.
+try:
+    _startup_conn = db.get_connection()
+    db.release_connection(_startup_conn)
+except Exception as _e:
+    import sys as _sys
+    print(f"[grove-mcp] WARNING: could not verify grove schema: {_e}", file=_sys.stderr)
+
+
 # ── Grove tools ───────────────────────────────────────────────────────────────
 
 @mcp.tool()
@@ -263,5 +274,9 @@ def grove_get_identity() -> dict:
     }
 
 
-if __name__ == "__main__":
+def main():
     mcp.run(transport="streamable-http")
+
+
+if __name__ == "__main__":
+    main()

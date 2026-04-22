@@ -27,9 +27,22 @@ def _get_pool():
             import psycopg2.pool
             dsn = os.getenv("WILLOW_DB_URL", "")
             if not dsn:
-                dsn = f"dbname={os.getenv('WILLOW_PG_DB', 'willow')} user={os.getenv('WILLOW_PG_USER', 'sean-campbell')}"
+                pg_db   = os.getenv("WILLOW_PG_DB", "willow_19")
+                pg_user = os.getenv("WILLOW_PG_USER", os.environ.get("USER", ""))
+                dsn = f"dbname={pg_db} user={pg_user}"
             _pool = psycopg2.pool.ThreadedConnectionPool(minconn=1, maxconn=10, dsn=dsn)
+            # Ensure grove schema exists on first pool creation
+            _bootstrap_schema(_pool)
     return _pool
+
+
+def _bootstrap_schema(pool):
+    """Create grove schema idempotently on first pool use."""
+    conn = pool.getconn()
+    try:
+        init_schema(conn)
+    finally:
+        pool.putconn(conn)
 
 
 def get_connection():

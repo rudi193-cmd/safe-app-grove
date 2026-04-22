@@ -50,4 +50,14 @@ async def send_packet(
 
 def send(ptype: PacketType, from_addr: str, to_addr: str,
          payload: dict, identity: Identity, **kwargs) -> bool:
+    """Sync wrapper. Raises RuntimeError if called inside a running event loop — use send_packet() directly there."""
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        loop = None
+    if loop and loop.is_running():
+        raise RuntimeError(
+            "u2u.send() called inside a running event loop. "
+            "Use 'await send_packet()' instead."
+        )
     return asyncio.run(send_packet(ptype, from_addr, to_addr, payload, identity, **kwargs))

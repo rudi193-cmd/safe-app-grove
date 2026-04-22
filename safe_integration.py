@@ -1,108 +1,144 @@
 """
 SAFE Framework Integration — Grove
-===================================
-Grove's connection to the Willow knowledge bus.
+====================================
+Grove's connection to the Willow 1.9 knowledge bus.
+b17: GRSI9  ΔΣ=42
 
-Drop point: POST /api/pigeon/drop
-Topics: ask, query, contribute, connect, status
+Portless. Reads/writes directly via the shared willow_19 Postgres DB.
+No HTTP. No porch. No queue files.
 """
 
 import json
 import os
 import uuid
-import sqlite3 as _sqlite3
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
-from datetime import datetime, timezone
 
-_STORE_ROOT = os.path.join(os.path.expanduser("~"), ".willow", "store")
-_STORE_ROOT = os.environ.get("WILLOW_STORE_ROOT", _STORE_ROOT)
 APP_ID = "grove"
-
-_session_id = str(uuid.uuid4())
-_APP_DATA = Path(os.path.expanduser("~")) / ".willow" / "apps" / APP_ID
+_APP_DATA = Path.home() / ".willow" / "apps" / APP_ID
 
 
-def ask(prompt: str, persona: Optional[str] = None, tier: str = "free") -> str:
-    """LLM routing via Willow — not available in portless mode."""
-    return "[Willow LLM routing not available in portless mode]"
-
-
-def ask_raw(prompt: str, tier: str = "free") -> dict:
-    """LLM routing via Willow — not available in portless mode."""
-    return {"ok": False, "error": "LLM routing not available in portless mode"}
+def _get_bridge():
+    """Load willow-1.9 PgBridge from repo path."""
+    import importlib.util
+    willow_root = Path(os.environ.get("WILLOW_ROOT",
+                       Path.home() / "github" / "willow-1.9"))
+    spec = importlib.util.spec_from_file_location(
+        "pg_bridge_19", Path(willow_root) / "core" / "pg_bridge.py"
+    )
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod.PgBridge()
 
 
 def query(q: str, limit: int = 5) -> list:
-    """Query Willow's knowledge store directly via SOIL SQLite."""
-    db_path = os.path.join(_STORE_ROOT, "knowledge", "store.db")
-    if not os.path.exists(db_path):
-        return []
+    """Query willow-1.9 knowledge store via Postgres."""
     try:
-        conn = _sqlite3.connect(db_path)
-        rows = conn.execute(
-            "SELECT data FROM records WHERE deleted=0 AND data LIKE ? LIMIT ?",
-            (f"%{q}%", limit)
-        ).fetchall()
-        conn.close()
-        return [json.loads(r[0]) for r in rows]
+        bridge = _get_bridge()
+        return bridge.knowledge_search(q, project=APP_ID, limit=limit)
     except Exception:
         return []
 
 
-def contribute(content: str, category: str = "narrative", metadata: Optional[dict] = None) -> dict:
-    """Stage a contribution to the Willow intake queue (filesystem, portless)."""
+def contribute(content: str, category: str = "narrative",
+               metadata: Optional[dict] = None) -> dict:
+    """Write a knowledge atom to willow-1.9 KB from Grove."""
     try:
-        intake_dir = _APP_DATA / "intake"
-        intake_dir.mkdir(parents=True, exist_ok=True)
-        ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S")
-        fname = intake_dir / f"{ts}_{uuid.uuid4().hex[:8]}.json"
-        fname.write_text(json.dumps({
-            "source_app": APP_ID,
-            "type": category,
-            "content": content,
-            "metadata": metadata or {},
-            "contributed_at": datetime.now(timezone.utc).isoformat(),
-        }, indent=2))
-        return {"ok": True, "staged": str(fname)}
+        bridge = _get_bridge()
+        atom_id = f"grove_{uuid.uuid4().hex[:8]}"
+        bridge.knowledge_put({
+            "id": atom_id,
+            "project": APP_ID,
+            "title": content[:120],
+            "summary": content[:500],
+            "source_type": "grove_contribution",
+            "category": category,
+            "content": metadata or {},
+        })
+        return {"ok": True, "id": atom_id}
     except Exception as e:
         return {"ok": False, "error": str(e)}
 
 
-def connect(entity_a: str, entity_b: str, relation: str = "related_to") -> dict:
-    """Propose an entity connection for Willow review."""
-    return _drop("connect", {
-        "entity_a": entity_a,
-        "entity_b": entity_b,
-        "relation": relation,
-    })
+def flush_to_kb() -> int:
+    """
+    Index unread Grove messages into the willow-1.9 knowledge store.
+    Reads from grove.messages (willow_19 DB), writes to public.knowledge.
+    Marks indexed rows with willow_indexed_at = NOW().
+    Returns count of messages indexed.
+    """
+    try:
+        bridge = _get_bridge()
+    except Exception:
+        return 0
+
+    try:
+        import psycopg2.extras
+        with bridge.conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute("""
+                SELECT m.id, m.sender, m.content, m.created_at, c.name AS channel_name
+                FROM grove.messages m
+                JOIN grove.channels c ON m.channel_id = c.id
+                WHERE m.willow_indexed_at IS NULL AND m.is_deleted = 0
+                ORDER BY m.created_at ASC LIMIT 50
+            """)
+            messages = [dict(r) for r in cur.fetchall()]
+    except Exception:
+        return 0
+
+    if not messages:
+        return 0
+
+    indexed_ids = []
+    for msg in messages:
+        # DM channels are prefixed dm: — use sender name as project
+        ch = msg["channel_name"]
+        project = f"grove_{ch.replace(':', '_').replace('@', '_')}"
+        sender_short = msg["sender"].split("@")[0]
+        bridge.knowledge_put({
+            "id": f"grove_msg_{msg['id']}",
+            "project": project,
+            "title": f"[{ch}] {sender_short}",
+            "summary": (msg["content"] or "")[:500],
+            "source_type": "grove_message",
+            "category": "message",
+            "valid_at": msg["created_at"],
+            "content": {
+                "sender": msg["sender"],
+                "channel": ch,
+                "grove_message_id": msg["id"],
+            },
+        })
+        indexed_ids.append(msg["id"])
+
+    try:
+        with bridge.conn.cursor() as cur:
+            cur.execute(
+                "UPDATE grove.messages SET willow_indexed_at = NOW() WHERE id = ANY(%s)",
+                (indexed_ids,)
+            )
+        bridge.conn.commit()
+    except Exception:
+        pass
+
+    return len(indexed_ids)
 
 
 def status() -> dict:
-    """Check if Willow store is reachable."""
-    db_path = os.path.join(_STORE_ROOT, "knowledge", "store.db")
-    reachable = os.path.exists(db_path)
-    return {"ok": reachable, "store": _STORE_ROOT, "mode": "portless"}
+    """Check if willow-1.9 KB is reachable."""
+    try:
+        bridge = _get_bridge()
+        bridge.conn.close()
+        return {"ok": True, "mode": "postgres", "db": os.getenv("WILLOW_PG_DB", "willow_19")}
+    except Exception as e:
+        return {"ok": False, "error": str(e), "mode": "postgres"}
 
 
-def _drop(topic: str, payload: dict) -> dict:
-    return {"ok": False, "error": "portless mode — porch removed"}
-
-
-# ── Willow Consent Helpers ────────────────────────────────────────────────────
-
-def get_consent_status(token=None):
-    return False
-
-
-def request_consent_url():
-    return None
-
-
-def send(to_app, subject, body, thread_id=None):
-    return {"ok": False, "error": "messaging not available in portless mode"}
-
-
-def check_inbox(unread_only=True):
-    return []
-
+def connect(entity_a: str, entity_b: str, relation: str = "related_to") -> dict:
+    """Propose an entity connection for Willow review."""
+    return contribute(
+        f"{entity_a} {relation} {entity_b}",
+        category="connection",
+        metadata={"entity_a": entity_a, "entity_b": entity_b, "relation": relation},
+    )

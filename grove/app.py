@@ -1,5 +1,6 @@
 """
 Grove — Sovereign Messaging TUI
+b17: GRVAP  ΔΣ=42
 Human-to-human over u2u. Launch: python3 -m grove
 """
 
@@ -602,15 +603,16 @@ class GroveApp(App):
 # ---------------------------------------------------------------------------
 
 def _dm_channel(conn, contact_addr: str) -> dict:
+    """Get or create a DM channel for contact_addr. Uses grove search_path set by get_connection()."""
     name = f"dm:{contact_addr}"
     cur = conn.cursor()
     cur.execute("""
-        INSERT INTO grove.channels (name, channel_type, description)
+        INSERT INTO channels (name, channel_type, description)
         VALUES (%s, 'direct', %s)
         ON CONFLICT (name) DO NOTHING
     """, (name, f"DM with {contact_addr}"))
     conn.commit()
-    cur.execute("SELECT * FROM grove.channels WHERE name = %s", (name,))
+    cur.execute("SELECT * FROM channels WHERE name = %s", (name,))
     row = cur.fetchone()
     cols = [d[0] for d in cur.description]
     return dict(zip(cols, row))

@@ -1,10 +1,10 @@
 {
   "mcpServers": {
     "willow": {
-      "command": "/home/sean-campbell/github/willow-1.7/willow.sh",
+      "command": "/home/sean-campbell/github/willow-1.9/willow.sh",
       "env": {
         "WILLOW_STORE_ROOT": "/home/sean-campbell/.willow/store",
-        "WILLOW_PG_DB": "willow",
+        "WILLOW_PG_DB": "willow_19",
         "WILLOW_PG_USER": "sean-campbell",
         "WILLOW_HANDOFF_DB": "/home/sean-campbell/Ashokoa/agents/hanuman/index/haumana_handoffs/handoffs.db"
       }
