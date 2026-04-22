@@ -8,6 +8,16 @@
         "WILLOW_PG_USER": "sean-campbell",
         "WILLOW_HANDOFF_DB": "/home/sean-campbell/Ashokoa/agents/hanuman/index/haumana_handoffs/handoffs.db"
       }
+    },
+    "grove": {
+      "command": "python3",
+      "args": ["-m", "grove.mcp_local"],
+      "cwd": "/home/sean-campbell/github/safe-app-grove",
+      "env": {
+        "WILLOW_PG_DB": "willow_19",
+        "WILLOW_PG_USER": "sean-campbell",
+        "PYTHONPATH": "/home/sean-campbell/github/safe-app-grove"
+      }
     }
   }
 }
