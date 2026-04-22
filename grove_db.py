@@ -30,7 +30,7 @@ def _get_pool():
                 pg_db   = os.getenv("WILLOW_PG_DB", "willow_19")
                 pg_user = os.getenv("WILLOW_PG_USER", os.environ.get("USER", ""))
                 dsn = f"dbname={pg_db} user={pg_user}"
-            _pool = psycopg2.pool.ThreadedConnectionPool(minconn=1, maxconn=10, dsn=dsn)
+            _pool = psycopg2.pool.ThreadedConnectionPool(minconn=1, maxconn=3, dsn=dsn)
             # Ensure grove schema exists on first pool creation
             _bootstrap_schema(_pool)
     return _pool
@@ -181,10 +181,22 @@ def send_message(conn, *, channel_id: int, sender: str, content: str,
     return dict(zip(cols, row))
 
 
-def get_history(conn, channel_id: int, limit: int = 100, before_id: int = None) -> List[Dict[str, Any]]:
-    """Return top-level messages (no replies), newest first."""
+def get_history(conn, channel_id: int, limit: int = 100,
+                before_id: int = None, since_id: int = None) -> List[Dict[str, Any]]:
+    """Return top-level messages (no replies).
+
+    before_id: newest-first pagination (go backward).
+    since_id:  forward polling — return messages with id > since_id, oldest first.
+               Use the last returned id as your next since_id cursor.
+    """
     cur = conn.cursor()
-    if before_id:
+    if since_id is not None:
+        cur.execute("""
+            SELECT * FROM messages
+            WHERE channel_id = %s AND reply_to_id IS NULL AND is_deleted = 0 AND id > %s
+            ORDER BY id ASC LIMIT %s
+        """, (channel_id, since_id, limit))
+    elif before_id:
         cur.execute("""
             SELECT * FROM messages
             WHERE channel_id = %s AND reply_to_id IS NULL AND is_deleted = 0 AND id < %s
