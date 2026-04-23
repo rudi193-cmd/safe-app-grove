@@ -33,7 +33,7 @@ jobs:
           python-version: "3.11"
 
       - name: Install dependencies
-        run: pip install -e "." pytest
+        run: pip install psycopg2-binary pytest
 
       - name: Run tests
         run: python -m pytest tests/ -q
