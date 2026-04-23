@@ -14,6 +14,7 @@ Connect to claude.ai:
   3. Authorize in the browser prompt that appears
 """
 import asyncio
+import html
 import os
 import socket
 from pathlib import Path
@@ -77,6 +78,8 @@ async def grove_approve(request: Request) -> HTMLResponse:
     client, params = entry
     code = _provider.issue_code(client, params)
     redirect_url = construct_redirect_uri(str(params.redirect_uri), code=code, state=params.state)
+    client_id_safe = html.escape(client.client_id, quote=True)
+    redirect_url_safe = html.escape(str(redirect_url), quote=True)
 
     return HTMLResponse(f"""<!DOCTYPE html>
 <html lang="en">
@@ -135,7 +138,7 @@ async def grove_approve(request: Request) -> HTMLResponse:
     <h1>Grove MCP</h1>
     <p class="subtitle">Authorization request</p>
     <p style="margin-bottom:1rem; color:#a0aec0;">
-      <span class="client">{client.client_id}</span> is requesting access to your Grove workspace.
+      <span class="client">{client_id_safe}</span> is requesting access to your Grove workspace.
     </p>
     <div class="scopes">
       <strong>Permissions:</strong><br>
@@ -143,7 +146,7 @@ async def grove_approve(request: Request) -> HTMLResponse:
       • Send messages<br>
       • Search conversations
     </div>
-    <a class="btn" href="{redirect_url}">Authorize Grove</a>
+    <a class="btn" href="{redirect_url_safe}">Authorize Grove</a>
   </div>
 </body>
 </html>""")
